@@ -55,6 +55,7 @@ const (
 	SkillJudgmentDay   SkillID = "judgment-day"
 	SkillBranchPR      SkillID = "branch-pr"
 	SkillIssueCreation SkillID = "issue-creation"
+	SkillSkillRegistry SkillID = "skill-registry"
 )
 
 type PersonaID string
@@ -109,3 +110,12 @@ const (
 	SDDModeSingle SDDModeID = "single"
 	SDDModeMulti  SDDModeID = "multi"
 )
+
+// Profile represents a named SDD orchestrator configuration with model assignments.
+// The default profile (Name="" or Name="default") maps to the base sdd-orchestrator.
+// Named profiles generate sdd-orchestrator-{Name} + suffixed sub-agents.
+type Profile struct {
+	Name              string                     // e.g. "cheap", "premium"; empty = default
+	OrchestratorModel ModelAssignment            // orchestrator model
+	PhaseAssignments  map[string]ModelAssignment // key = phase name (e.g. "sdd-apply")
+}
