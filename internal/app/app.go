@@ -16,6 +16,7 @@ import (
 	"github.com/gentleman-programming/gentle-ai/internal/model"
 	"github.com/gentleman-programming/gentle-ai/internal/pipeline"
 	"github.com/gentleman-programming/gentle-ai/internal/planner"
+	"github.com/gentleman-programming/gentle-ai/internal/sdd/autonomous"
 	"github.com/gentleman-programming/gentle-ai/internal/state"
 	"github.com/gentleman-programming/gentle-ai/internal/system"
 	"github.com/gentleman-programming/gentle-ai/internal/taskrunner"
@@ -134,6 +135,8 @@ func RunArgs(args []string, stdout io.Writer) error {
 		return cli.RunRestore(args[1:], stdout)
 	case "task":
 		return runTask(context.Background(), args[1:], stdout)
+	case "sdd-autonomous":
+		return autonomous.RunFromArgs(args[1:], stdout)
 	default:
 		return fmt.Errorf("unknown command %q — run 'gentle-ai help' for available commands", args[0])
 	}
