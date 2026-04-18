@@ -80,8 +80,11 @@ You can also call mem_capture_passive(content) directly with any text containing
 ### AFTER COMPACTION
 
 If you see a compaction message or "FIRST ACTION REQUIRED":
-1. IMMEDIATELY call mem_session_summary with the compacted summary content — this persists what was done before compaction
-2. Call mem_context to recover additional context from previous sessions
-3. Only THEN continue working
+1. IMMEDIATELY write the session summary as text output (see format below) — this allows the system to capture and persist it
+2. If tools are available (no anti-loop guard blocking), call mem_session_summary with the content
+3. Call mem_context to recover additional context from previous sessions
+4. Only THEN continue working
 
 Do not skip step 1. Without it, everything done before compaction is lost from memory.
+
+> **NOTE**: Some orchestration layers block tool calls during summary generation (anti-loop guard). In those cases, output the summary as structured text — the system will capture it. Call the tool only when it's safe to do so.
