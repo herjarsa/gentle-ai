@@ -85,12 +85,17 @@ func truncate(s string, max int) string {
 	return s[:max-3] + "..."
 }
 
+// EngramStatus indicates the maturity of the Engram integration.
+// "development" — not yet functional; use --save-to-engram when MCP server is available.
+const EngramStatus = "development"
+
 // DefaultEngramSaveFunc is a placeholder that can be replaced with actual MCP call.
+// It returns an error to signal that the integration is not yet functional.
 var DefaultEngramSaveFunc = func(title, content, topicKey string) error {
-	// This is a placeholder - in real usage, this would call mem_save MCP tool
-	// For now, we just print to stderr for debugging
-	fmt.Printf("[Engram] Would save to %s: %s\n", topicKey, title)
-	return nil
+	fmt.Printf("[Engram: development] Would save to %s: %s\n", topicKey, title)
+	fmt.Printf("[Engram: development] Integration is in development — Engram MCP server required for persistence.\n")
+	fmt.Printf("[Engram: development] To enable: ensure Engram MCP server is running and --save-to-engram flag is used.\n")
+	return fmt.Errorf("engram integration is in development — Engram MCP server required for persistence")
 }
 
 // SaveReportToEngram saves a report using the default saver.

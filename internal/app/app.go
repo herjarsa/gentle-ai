@@ -35,6 +35,11 @@ var (
 	upgradeExecute      = upgrade.Execute
 )
 
+// newTaskLoop is injectable for testing.
+var newTaskLoop = func(config taskrunner.RunConfig, engine agentbuilder.GenerationEngine) *taskrunner.Loop {
+	return taskrunner.NewLoop(config, engine)
+}
+
 func Run() error {
 	return RunArgs(os.Args[1:], os.Stdout)
 }
@@ -386,6 +391,9 @@ func runTask(ctx context.Context, args []string, stdout io.Writer) error {
 		case arg == "--verbose":
 			config.Verbose = true
 			i++
+		case arg == "--dangerous":
+			config.Dangerous = true
+			i++
 		case arg == "--save-to-engram":
 			config.SaveToEngram = true
 			i++
@@ -421,7 +429,7 @@ func runTask(ctx context.Context, args []string, stdout io.Writer) error {
 	}
 
 	if strings.TrimSpace(taskDescription) == "" {
-		return fmt.Errorf("usage: gentle-ai task [flags] \"task description\"\n\nFlags:\n  --verbose         Show each step\n  --workdir DIR     Working directory\n  --engine ENGINE   Force engine (claude-code, opencode, gemini, codex)\n  --max-iter N      Max iterations (default: 30)\n  --save-to-engram  Save to Engram")
+		return fmt.Errorf("usage: gentle-ai task [flags] \"task description\"\n\nFlags:\n  --verbose         Show each step\n  --workdir DIR     Working directory\n  --engine ENGINE   Force engine (claude-code, opencode, gemini, codex)\n  --max-iter N      Max iterations (default: 30)\n  --save-to-engram  Save to Engram\n  --dangerous       Disable command safety checks (use with care)")
 	}
 
 	config.Task = taskDescription
@@ -470,11 +478,12 @@ func runTask(ctx context.Context, args []string, stdout io.Writer) error {
 		fmt.Fprintf(stdout, "Task: %s\n", config.Task)
 		fmt.Fprintf(stdout, "WorkDir: %s\n", config.WorkDir)
 		fmt.Fprintf(stdout, "Engine: %s\n", config.Engine)
-		fmt.Fprintf(stdout, "MaxIter: %d\n\n", config.MaxIter)
+		fmt.Fprintf(stdout, "MaxIter: %d\n", config.MaxIter)
+		fmt.Fprintf(stdout, "Dangerous: %v\n\n", config.Dangerous)
 	}
 
 	// Run the loop
-	loop := taskrunner.NewLoop(config, engine)
+	loop := newTaskLoop(config, engine)
 	report, err := loop.Run(ctx)
 	if err != nil {
 		return fmt.Errorf("task execution failed: %w", err)

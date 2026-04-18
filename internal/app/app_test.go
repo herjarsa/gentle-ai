@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,8 +10,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gentleman-programming/gentle-ai/internal/agentbuilder"
 	"github.com/gentleman-programming/gentle-ai/internal/backup"
 	"github.com/gentleman-programming/gentle-ai/internal/model"
+	"github.com/gentleman-programming/gentle-ai/internal/taskrunner"
 )
 
 // TestListBackupsNewestFirst verifies that ListBackups returns manifests sorted
@@ -330,5 +333,79 @@ func TestUnknownCommandSuggestsHelp(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "gentle-ai help") {
 		t.Error("unknown command error should suggest 'gentle-ai help'")
+	}
+}
+
+// mockTaskEngine is a minimal GenerationEngine for testing.
+type mockTaskEngine struct{}
+
+func (m *mockTaskEngine) Agent() model.AgentID { return model.AgentClaudeCode }
+func (m *mockTaskEngine) Generate(ctx context.Context, prompt string) (string, error) {
+	return `{"action":"done","summary":"test","reason":"test"}`, nil
+}
+func (m *mockTaskEngine) Available() bool { return true }
+
+// TestTaskDangerousFlagVerified verifies that --dangerous is accepted by runTask
+// and propagates Dangerous=true to RunConfig.
+func TestTaskDangerousFlagVerified(t *testing.T) {
+	var capturedConfig taskrunner.RunConfig
+
+	origNewTaskLoop := newTaskLoop
+	t.Cleanup(func() { newTaskLoop = origNewTaskLoop })
+
+	// Use a real NewLoop but capture the config before engine is used.
+	// The mock engine returns ActionDone so Run() exits immediately.
+	newTaskLoop = func(config taskrunner.RunConfig, engine agentbuilder.GenerationEngine) *taskrunner.Loop {
+		capturedConfig = config
+		loop := taskrunner.NewLoop(config, engine)
+		// Short-circuit Run() to avoid real engine execution
+		loop.Engine = &mockTaskEngine{}
+		return loop
+	}
+
+	home := t.TempDir()
+	origHome := os.Getenv("HOME")
+	t.Cleanup(func() { os.Setenv("HOME", origHome) })
+	os.Setenv("HOME", home)
+
+	// Test with --dangerous flag
+	var buf bytes.Buffer
+	err := RunArgs([]string{"task", "--workdir", home, "--engine", "claude-code", "--dangerous", "test task"}, &buf)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !capturedConfig.Dangerous {
+		t.Error("--dangerous flag should set RunConfig.Dangerous=true")
+	}
+}
+
+// TestTaskNoDangerousFlagVerified verifies that without --dangerous,
+// Dangerous defaults to false.
+func TestTaskNoDangerousFlagVerified(t *testing.T) {
+	var capturedConfig taskrunner.RunConfig
+
+	home := t.TempDir()
+	origHome := os.Getenv("HOME")
+	t.Cleanup(func() { os.Setenv("HOME", origHome) })
+	os.Setenv("HOME", home)
+
+	origNewTaskLoop := newTaskLoop
+	t.Cleanup(func() { newTaskLoop = origNewTaskLoop })
+
+	newTaskLoop = func(config taskrunner.RunConfig, engine agentbuilder.GenerationEngine) *taskrunner.Loop {
+		capturedConfig = config
+		loop := taskrunner.NewLoop(config, engine)
+		loop.Engine = &mockTaskEngine{}
+		return loop
+	}
+
+	// Test without --dangerous flag; use --engine to avoid auto-select delay
+	var buf bytes.Buffer
+	err := RunArgs([]string{"task", "--workdir", home, "--engine", "claude-code", "test task"}, &buf)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if capturedConfig.Dangerous {
+		t.Error("without --dangerous flag, RunConfig.Dangerous should be false")
 	}
 }

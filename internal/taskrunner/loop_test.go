@@ -1,9 +1,13 @@
 package taskrunner
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/gentleman-programming/gentle-ai/internal/model"
 )
 
 func TestParseActionValid(t *testing.T) {
@@ -212,6 +216,48 @@ func TestBuildTurnPromptLongHistory(t *testing.T) {
 	// Should indicate showing only last 10
 	if !strings.Contains(prompt, "Showing last 10") {
 		t.Error("prompt should indicate truncated history")
+	}
+}
+
+// mockEngine is a minimal GenerationEngine for testing.
+type mockEngine struct {
+	agentID model.AgentID
+}
+
+func (m *mockEngine) Agent() model.AgentID { return m.agentID }
+
+func (m *mockEngine) Generate(ctx context.Context, prompt string) (string, error) {
+	return `{"action":"done","summary":"mock done","reason":"test"}`, nil
+}
+
+func (m *mockEngine) Available() bool { return true }
+
+// TestNewLoopDangerousPropagates verifies that the Dangerous field from RunConfig
+// is propagated to the Executor via NewLoop.
+func TestNewLoopDangerousPropagates(t *testing.T) {
+	mock := &mockEngine{agentID: model.AgentClaudeCode}
+
+	for _, dangerous := range []bool{false, true} {
+		name := "safe"
+		if dangerous {
+			name = "dangerous"
+		}
+		t.Run(name, func(t *testing.T) {
+			config := RunConfig{
+				Task:      "test task",
+				WorkDir:   ".",
+				Dangerous: dangerous,
+				MaxIter:   1,
+				Timeout:   time.Second,
+			}
+			loop := NewLoop(config, mock)
+			if loop.Executor == nil {
+				t.Fatal("Executor should not be nil")
+			}
+			if loop.Executor.Dangerous != dangerous {
+				t.Errorf("Executor.Dangerous=%v, want %v", loop.Executor.Dangerous, dangerous)
+			}
+		})
 	}
 }
 

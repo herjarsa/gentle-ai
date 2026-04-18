@@ -26,13 +26,14 @@ func NewOrchestrator(engine agentbuilder.GenerationEngine, verbose bool) *Orches
 // RunConfig configures a complete SDD run.
 type RunConfig struct {
 	ChangeName  string
-	StartPhase  PhaseType      // Where to start (default: explore)
-	EndPhase    PhaseType      // Where to end (default: archive)
-	SkipVerify  bool           // Skip verification phase
-	AutoApprove bool           // Auto-approve each phase without user confirmation
-	MaxIter     int            // Max iterations per phase
-	Timeout     time.Duration  // Timeout per phase
-	Engine      model.AgentID  // Force specific engine
+	StartPhase  PhaseType     // Where to start (default: explore)
+	EndPhase    PhaseType     // Where to end (default: archive)
+	SkipVerify  bool          // Skip verification phase
+	AutoApprove bool         // Auto-approve each phase without user confirmation
+	MaxIter     int          // Max iterations per phase
+	Timeout     time.Duration // Timeout per phase
+	Engine      model.AgentID // Force specific engine
+	Dangerous   bool         // Skip command denylist when true
 }
 
 // RunResult contains the results of all phases.
@@ -65,13 +66,14 @@ func (o *Orchestrator) Run(ctx context.Context, config RunConfig) (*RunResult, e
 		}
 
 		phaseConfig := PhaseConfig{
-			Phase:      phase,
+			Phase:     phase,
 			ChangeName: config.ChangeName,
-			Context:    accumulatedContext,
-			MaxIter:    config.MaxIter,
-			Timeout:    config.Timeout,
-			Engine:     string(config.Engine),
-			Verbose:    o.verbose,
+			Context:   accumulatedContext,
+			MaxIter:   config.MaxIter,
+			Timeout:   config.Timeout,
+			Engine:    string(config.Engine),
+			Verbose:   o.verbose,
+			Dangerous: config.Dangerous,
 		}
 
 		phaseResult, err := o.phaseRunner.Run(ctx, phaseConfig)

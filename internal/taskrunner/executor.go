@@ -12,15 +12,17 @@ import (
 
 // Executor runs actions on the real system.
 type Executor struct {
-	WorkDir string
-	Timeout time.Duration
+	WorkDir   string
+	Timeout   time.Duration
+	Dangerous bool // skip command denylist when true
 }
 
 // NewExecutor creates a new executor.
-func NewExecutor(workDir string, timeout time.Duration) *Executor {
+func NewExecutor(workDir string, timeout time.Duration, dangerous bool) *Executor {
 	return &Executor{
-		WorkDir: workDir,
-		Timeout: timeout,
+		WorkDir:   workDir,
+		Timeout:   timeout,
+		Dangerous: dangerous,
 	}
 }
 
@@ -50,6 +52,13 @@ func (e *Executor) executeShell(ctx context.Context, command string) (string, er
 		return "", fmt.Errorf("empty command")
 	}
 
+	// Security check: block dangerous commands unless dangerous mode is enabled.
+	if !e.Dangerous {
+		if err := IsCommandAllowed(command); err != nil {
+			return "", fmt.Errorf("command blocked: %w (use --dangerous to override)", err)
+		}
+	}
+
 	cmd := exec.CommandContext(ctx, "bash", "-c", command)
 	cmd.Dir = e.WorkDir
 	cmd.Env = os.Environ()
@@ -68,15 +77,64 @@ func (e *Executor) executeShell(ctx context.Context, command string) (string, er
 	return result, nil
 }
 
-func (e *Executor) executeWriteFile(path, content string) (string, error) {
+// validatePath ensures a path resolves inside WorkDir and does not escape
+// via "../" traversal or symlink manipulation. Returns the absolute path
+// if valid, or an error describing why it was rejected.
+func (e *Executor) validatePath(path string) (string, error) {
 	if path == "" {
 		return "", fmt.Errorf("empty path")
 	}
 
-	// Resolve relative paths against workdir
+	// Resolve relative paths against WorkDir.
 	if !filepath.IsAbs(path) {
 		path = filepath.Join(e.WorkDir, path)
 	}
+
+	// Clean the path (removes .. components).
+	absPath := filepath.Clean(path)
+
+	// Resolve symlinks to prevent escapes via symlink traversal.
+	resolvedPath, err := filepath.EvalSymlinks(absPath)
+	if err != nil && !os.IsNotExist(err) {
+		return "", fmt.Errorf("resolve path: %w", err)
+	}
+	if os.IsNotExist(err) {
+		// New file — validate the parent directory.
+		resolvedPath = filepath.Dir(absPath)
+		resolvedPath, err = filepath.EvalSymlinks(resolvedPath)
+		if err != nil && !os.IsNotExist(err) {
+			return "", fmt.Errorf("resolve workdir: %w", err)
+		}
+		if os.IsNotExist(err) {
+			// Parent doesn't exist yet; use the pre-resolved path for prefix check.
+			resolvedPath = filepath.Dir(absPath)
+		}
+	}
+
+	// Resolve WorkDir similarly for comparison.
+	workDir := filepath.Clean(e.WorkDir)
+	resolvedWorkDir, err := filepath.EvalSymlinks(workDir)
+	if err != nil && !os.IsNotExist(err) {
+		return "", fmt.Errorf("resolve workdir: %w", err)
+	}
+	if os.IsNotExist(err) {
+		resolvedWorkDir = workDir
+	}
+
+	// Ensure the path is within WorkDir.
+	if !strings.HasPrefix(resolvedPath, resolvedWorkDir+string(filepath.Separator)) && resolvedPath != resolvedWorkDir {
+		return "", fmt.Errorf("path %q escapes workdir %q", absPath, resolvedWorkDir)
+	}
+
+	return absPath, nil
+}
+
+func (e *Executor) executeWriteFile(path, content string) (string, error) {
+	validated, err := e.validatePath(path)
+	if err != nil {
+		return "", err
+	}
+	path = validated
 
 	// Ensure directory exists
 	dir := filepath.Dir(path)
@@ -92,14 +150,11 @@ func (e *Executor) executeWriteFile(path, content string) (string, error) {
 }
 
 func (e *Executor) executeReadFile(path string) (string, error) {
-	if path == "" {
-		return "", fmt.Errorf("empty path")
+	validated, err := e.validatePath(path)
+	if err != nil {
+		return "", err
 	}
-
-	// Resolve relative paths against workdir
-	if !filepath.IsAbs(path) {
-		path = filepath.Join(e.WorkDir, path)
-	}
+	path = validated
 
 	content, err := os.ReadFile(path)
 	if err != nil {
@@ -110,17 +165,15 @@ func (e *Executor) executeReadFile(path string) (string, error) {
 }
 
 func (e *Executor) executeEditFile(path, oldText, newText string) (string, error) {
-	if path == "" {
-		return "", fmt.Errorf("empty path")
-	}
 	if oldText == "" {
 		return "", fmt.Errorf("old_text cannot be empty for edit_file")
 	}
 
-	// Resolve relative paths against workdir
-	if !filepath.IsAbs(path) {
-		path = filepath.Join(e.WorkDir, path)
+	validated, err := e.validatePath(path)
+	if err != nil {
+		return "", err
 	}
+	path = validated
 
 	content, err := os.ReadFile(path)
 	if err != nil {
@@ -132,7 +185,7 @@ func (e *Executor) executeEditFile(path, oldText, newText string) (string, error
 		return "", fmt.Errorf("old_text not found in file")
 	}
 
-	newContent := strings.ReplaceAll(oldContent, oldText, newText)
+	newContent := strings.Replace(oldContent, oldText, newText, 1)
 
 	if err := os.WriteFile(path, []byte(newContent), 0644); err != nil {
 		return "", fmt.Errorf("write file: %w", err)

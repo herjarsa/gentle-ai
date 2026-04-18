@@ -64,6 +64,7 @@ type RunConfig struct {
 	Verbose      bool
 	Engine       model.AgentID // empty = auto-select
 	Timeout      time.Duration // per-step timeout
+	Dangerous    bool          // skip command denylist when true
 	SaveToEngram bool
 	ProjectName  string // for engram grouping
 }
@@ -81,7 +82,7 @@ func DefaultRunConfig(task string) RunConfig {
 }
 
 // Validate checks the configuration.
-func (c RunConfig) Validate() error {
+func (c *RunConfig) Validate() error {
 	if strings.TrimSpace(c.Task) == "" {
 		return fmt.Errorf("task cannot be empty")
 	}

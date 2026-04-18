@@ -79,6 +79,30 @@ func TestRunConfigValidate(t *testing.T) {
 	}
 }
 
+// TestValidateMutationsPersist verifies that Validate() uses a pointer receiver
+// so that mutations (MaxIter=0→30, Timeout=0→2min) persist to the caller.
+func TestValidateMutationsPersist(t *testing.T) {
+	c := RunConfig{Task: "test", MaxIter: 0, Timeout: 0}
+	err := (&c).Validate()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if c.MaxIter != 30 {
+		t.Errorf("MaxIter=%d, want 30", c.MaxIter)
+	}
+	if c.Timeout != 2*time.Minute {
+		t.Errorf("Timeout=%v, want 2*time.Minute", c.Timeout)
+	}
+}
+
+// TestValidateDangerousDefault verifies that Dangerous defaults to false.
+func TestValidateDangerousDefault(t *testing.T) {
+	c := RunConfig{Task: "test"}
+	if c.Dangerous {
+		t.Error("Dangerous should default to false")
+	}
+}
+
 func TestActionJSON(t *testing.T) {
 	action := Action{
 		Type:    ActionShell,

@@ -26,13 +26,15 @@ const (
 
 // PhaseConfig configures a single SDD phase run.
 type PhaseConfig struct {
-	Phase       PhaseType
-	ChangeName  string
-	Context     string           // Previous phase outputs
-	MaxIter     int
-	Timeout     time.Duration
-	Engine      string           // Force specific engine
-	Verbose     bool
+	Phase      PhaseType
+	ChangeName string
+	Task       string          // Task description (used to build the phase prompt)
+	Context    string          // Previous phase outputs
+	MaxIter    int
+	Timeout    time.Duration
+	Engine     string         // Force specific engine
+	Verbose    bool
+	Dangerous  bool           // Skip command denylist when true
 }
 
 // PhaseResult is the output of running a phase.
@@ -67,10 +69,11 @@ func (r *PhaseRunner) Run(ctx context.Context, config PhaseConfig) (*PhaseResult
 
 	// Create run config for taskrunner
 	runConfig := taskrunner.RunConfig{
-		Task:    task,
-		MaxIter: config.MaxIter,
-		Timeout: config.Timeout,
-		Verbose: config.Verbose,
+		Task:     task,
+		MaxIter:  config.MaxIter,
+		Timeout:  config.Timeout,
+		Verbose:  config.Verbose,
+		Dangerous: config.Dangerous,
 	}
 
 	if config.Engine != "" {
@@ -81,12 +84,15 @@ func (r *PhaseRunner) Run(ctx context.Context, config PhaseConfig) (*PhaseResult
 	loop := taskrunner.NewLoop(runConfig, r.Engine)
 	report, err := loop.Run(ctx)
 	if err != nil {
-		return &PhaseResult{
-			Phase:    config.Phase,
-			Success:  false,
-			Error:    err,
-			Duration: report.Duration,
-		}, nil
+		result := &PhaseResult{
+			Phase:   config.Phase,
+			Success: false,
+			Error:   err,
+		}
+		if report != nil {
+			result.Duration = report.Duration
+		}
+		return result, nil
 	}
 
 	result := &PhaseResult{

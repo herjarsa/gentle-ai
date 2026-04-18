@@ -33,24 +33,9 @@ func RunFromArgs(args []string, stdout io.Writer) error {
 		case arg == "--verbose" || arg == "-v":
 			verbose = true
 			i++
-		case strings.HasPrefix(arg, "--start="):
-			config.StartPhase = PhaseType(strings.TrimPrefix(arg, "--start="))
+		case arg == "--dangerous":
+			config.Dangerous = true
 			i++
-		case arg == "--start" && i+1 < len(args):
-			config.StartPhase = PhaseType(args[i+1])
-			i += 2
-		case strings.HasPrefix(arg, "--end="):
-			config.EndPhase = PhaseType(strings.TrimPrefix(arg, "--end="))
-			i++
-		case arg == "--end" && i+1 < len(args):
-			config.EndPhase = PhaseType(args[i+1])
-			i += 2
-		case strings.HasPrefix(arg, "--engine="):
-			config.Engine = model.AgentID(strings.TrimPrefix(arg, "--engine="))
-			i++
-		case arg == "--engine" && i+1 < len(args):
-			config.Engine = model.AgentID(args[i+1])
-			i += 2
 		case arg == "--skip-verify":
 			config.SkipVerify = true
 			i++
@@ -75,7 +60,8 @@ Flags:
   --start PHASE      Start from phase (explore, propose, spec, design, tasks, apply, verify, archive)
   --end PHASE        End at phase
   --engine ENGINE    Force engine (claude-code, opencode, gemini, codex)
-  --skip-verify      Skip verification phase`)
+  --skip-verify      Skip verification phase
+  --dangerous        Disable command safety checks (use with care)`)
 	}
 
 	config.ChangeName = changeName

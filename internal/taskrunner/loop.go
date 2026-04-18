@@ -13,18 +13,18 @@ import (
 
 // Loop runs the agentic loop until completion.
 type Loop struct {
-	Config       RunConfig
-	Executor     *Executor
-	Engine       agentbuilder.GenerationEngine
-	History      []StepRecord
-	LessonStore  *LessonStore
+	Config      RunConfig
+	Executor    *Executor
+	Engine      agentbuilder.GenerationEngine
+	History     []StepRecord
+	LessonStore *LessonStore
 }
 
 // NewLoop creates a new agent loop.
 func NewLoop(config RunConfig, engine agentbuilder.GenerationEngine) *Loop {
 	return &Loop{
 		Config:      config,
-		Executor:    NewExecutor(config.WorkDir, config.Timeout),
+		Executor:    NewExecutor(config.WorkDir, config.Timeout, config.Dangerous),
 		Engine:      engine,
 		History:     make([]StepRecord, 0),
 		LessonStore: DefaultLessonStore(),
